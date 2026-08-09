@@ -5,11 +5,18 @@ const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 const app = express();
 
+
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Real-Time Chat Backend is running 🚀"
+  });
+});
+
 // ---- Middleware ----
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:5173",
-    credentials: true,
   })
 );
 app.use(express.json());
