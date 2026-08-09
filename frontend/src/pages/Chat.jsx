@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import ChatHeader from "../components/ChatHeader.jsx";
@@ -27,24 +28,41 @@ function Chat() {
     prependHistory,
   } = useSocket(username);
 
-  // Load chat history from MongoDB via REST on mount (survives refresh)
+  // Redirect if username is missing
   useEffect(() => {
+    if (!username) {
+      navigate("/", { replace: true });
+    }
+  }, [username, navigate]);
+
+  // Load chat history from MongoDB
+  useEffect(() => {
+    if (!username) return;
+
     let isMounted = true;
 
     const loadHistory = async () => {
       try {
         setIsLoadingHistory(true);
         setLoadError(null);
+
         const data = await fetchMessages(1, 100);
+
         if (isMounted) {
           prependHistory(data.messages || []);
         }
       } catch (err) {
+        console.error("Failed to load chat history:", err);
+
         if (isMounted) {
-          setLoadError("Failed to load chat history. Is the backend running?");
+          setLoadError(
+            "Failed to load chat history. Is the backend running?"
+          );
         }
       } finally {
-        if (isMounted) setIsLoadingHistory(false);
+        if (isMounted) {
+          setIsLoadingHistory(false);
+        }
       }
     };
 
@@ -53,25 +71,23 @@ function Chat() {
     return () => {
       isMounted = false;
     };
-  }, [prependHistory]);
+  }, [username, prependHistory]);
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem("chat_username");
-    navigate("/");
+    navigate("/", { replace: true });
   }, [navigate]);
 
   if (!username) {
-    navigate("/");
     return null;
   }
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50">
+    <div className="flex h-full min-h-0 flex-col">
       <ChatHeader
         username={username}
-        onlineCount={onlineUsers.length}
-        isConnected={isConnected}
         onLogout={handleLogout}
+        isConnected={isConnected}
       />
 
       {systemNotice && (
@@ -95,6 +111,7 @@ function Chat() {
             isLoading={isLoadingHistory}
             loadError={loadError}
           />
+
           <MessageInput
             onSend={sendChatMessage}
             onTypingStart={notifyTypingStart}
@@ -103,7 +120,10 @@ function Chat() {
           />
         </div>
 
-        <OnlineUsers users={onlineUsers} currentUsername={username} />
+        <OnlineUsers
+          users={onlineUsers}
+          currentUsername={username}
+        />
       </div>
     </div>
   );

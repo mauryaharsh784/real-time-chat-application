@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import socket from "../services/socket.js";
 
@@ -23,34 +24,53 @@ const useSocket = (username) => {
   useEffect(() => {
     if (!username) return undefined;
 
-    socket.connect();
-
     const handleConnect = () => {
+      console.log("Socket connected:", socket.id);
+
       setIsConnected(true);
       setSocketError(null);
+
+      // Join chat immediately after connection
       socket.emit("user:join", username);
     };
 
     const handleDisconnect = () => {
+      console.log("Socket disconnected");
+
       setIsConnected(false);
     };
 
-    const handleConnectError = () => {
+    const handleConnectError = (error) => {
+      console.error("Socket connection error:", error);
+
+      setIsConnected(false);
       setSocketError("Unable to reach the server. Retrying...");
     };
 
     const handleReconnect = () => {
+      console.log("Socket reconnected");
+
       setSocketError(null);
+
+      // Re-join after reconnect
+      if (username) {
+        socket.emit("user:join", username);
+      }
     };
 
+    // IMPORTANT:
+    // Register listeners BEFORE connecting.
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("connect_error", handleConnectError);
     socket.io.on("reconnect", handleReconnect);
 
-    // If already connected (e.g. hot reload), join immediately
+    // If socket is already connected, join immediately.
     if (socket.connected) {
       handleConnect();
+    } else {
+      // Connect only after listeners are registered.
+      socket.connect();
     }
 
     return () => {
@@ -58,6 +78,7 @@ const useSocket = (username) => {
       socket.off("disconnect", handleDisconnect);
       socket.off("connect_error", handleConnectError);
       socket.io.off("reconnect", handleReconnect);
+
       socket.disconnect();
     };
   }, [username]);
@@ -66,8 +87,12 @@ const useSocket = (username) => {
   useEffect(() => {
     const showNotice = (text) => {
       setSystemNotice(text);
+
       clearTimeout(noticeTimeoutRef.current);
-      noticeTimeoutRef.current = setTimeout(() => setSystemNotice(null), 3000);
+
+      noticeTimeoutRef.current = setTimeout(() => {
+        setSystemNotice(null);
+      }, 3000);
     };
 
     const handleReceiveMessage = (msg) => {
@@ -87,11 +112,15 @@ const useSocket = (username) => {
     };
 
     const handleTypingStart = ({ username: typer }) => {
-      setTypingUsers((prev) => (prev.includes(typer) ? prev : [...prev, typer]));
+      setTypingUsers((prev) =>
+        prev.includes(typer) ? prev : [...prev, typer]
+      );
     };
 
     const handleTypingStop = ({ username: typer }) => {
-      setTypingUsers((prev) => prev.filter((u) => u !== typer));
+      setTypingUsers((prev) =>
+        prev.filter((user) => user !== typer)
+      );
     };
 
     const handleErrorMessage = (msg) => {
@@ -114,36 +143,58 @@ const useSocket = (username) => {
       socket.off("typing:start", handleTypingStart);
       socket.off("typing:stop", handleTypingStop);
       socket.off("error:message", handleErrorMessage);
+
       clearTimeout(noticeTimeoutRef.current);
     };
   }, []);
 
-  // ---- Actions exposed to components ----
-
+  // ---- Send message ----
   const sendChatMessage = useCallback((text) => {
     const trimmed = text.trim();
+
     if (!trimmed) return;
 
-    socket.emit("message:send", { message: trimmed }, (ack) => {
-      if (!ack?.success) {
-        setSocketError(ack?.error || "Message failed to send");
+    if (!socket.connected) {
+      setSocketError("Not connected to the server.");
+      return;
+    }
+
+    socket.emit(
+      "message:send",
+      { message: trimmed },
+      (ack) => {
+        if (!ack?.success) {
+          setSocketError(
+            ack?.error || "Message failed to send"
+          );
+        }
       }
-    });
+    );
   }, []);
 
+  // ---- Typing start ----
   const notifyTypingStart = useCallback(() => {
+    if (!socket.connected) return;
+
     socket.emit("typing:start");
+
     clearTimeout(typingTimeoutRef.current);
+
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit("typing:stop");
-    }, 1500); // debounce: auto-stop after 1.5s of inactivity
+    }, 1500);
   }, []);
 
+  // ---- Typing stop ----
   const notifyTypingStop = useCallback(() => {
     clearTimeout(typingTimeoutRef.current);
-    socket.emit("typing:stop");
+
+    if (socket.connected) {
+      socket.emit("typing:stop");
+    }
   }, []);
 
+  // ---- Load history ----
   const prependHistory = useCallback((history) => {
     setMessages(history);
   }, []);
@@ -152,7 +203,9 @@ const useSocket = (username) => {
     isConnected,
     messages,
     onlineUsers,
-    typingUsers: typingUsers.filter((u) => u !== username),
+    typingUsers: typingUsers.filter(
+      (user) => user !== username
+    ),
     systemNotice,
     socketError,
     sendChatMessage,
@@ -163,3 +216,4 @@ const useSocket = (username) => {
 };
 
 export default useSocket;
+
