@@ -326,5 +326,7 @@ Response `200`:
 - [x] Complete README with setup, API docs, Socket.io event docs, and testing guide
 
 **Note:** This project has not been deployed to any hosting provider — it is provided as a complete, runnable local project only.
-#   r e a l - t i m e - c h a t - a p p l i c a t i o n -  
+#   r e a l - t i m e - c h a t - a p p l i c a t i o n - 
+ 
+ #   r e a l - t i m e - c h a t - a p p l i c a t i o n  
  
